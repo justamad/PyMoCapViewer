@@ -5,26 +5,30 @@ import pandas as pd
 import numpy as np
 
 COLORS = ["red", "green", "blue"]
-WIDTH = 1280
-HEIGHT = 1024
 
 
 class MoCapViewer(object):
 
-    def __init__(self, sphere_radius: float = 0.01):
+    def __init__(
+            self,
+            sampling_frequency: int,
+            width: int = 1280,
+            height: int = 1024,
+            sphere_radius: float = 0.01
+    ):
         self.colors = vtk.vtkNamedColors()
         self.renderer = vtk.vtkRenderer()
         self.renderer.SetBackground(0, 0, 0)
         self.renderer.ResetCamera()
 
         self.render_window = vtk.vtkRenderWindow()
-        self.render_window.SetSize(WIDTH, HEIGHT)
+        self.render_window.SetSize(width, height)
         self.render_window.AddRenderer(self.renderer)
 
         self.render_window_interactor = vtk.vtkRenderWindowInteractor()
         self.render_window_interactor.SetRenderWindow(self.render_window)
         self.render_window_interactor.Initialize()
-        self._timer_id = self.render_window_interactor.CreateRepeatingTimer(33)
+        self._timer_id = self.render_window_interactor.CreateRepeatingTimer(1000 // sampling_frequency)
         self.render_window_interactor.AddObserver('KeyPressEvent', self.keypress_callback, 1.0)
 
         self.video_writer = vtk.vtkAVIWriter()
@@ -38,7 +42,7 @@ class MoCapViewer(object):
         self.__record = False
         self.__trans_vector = np.array([0, 0, 0])
         self.__scale_factor = 1.0
-        self._sphere_radius = sphere_radius
+        self.__sphere_radius = sphere_radius
         self.__axis_scale = 0.3
         self.__video_count = 0
 
@@ -46,11 +50,11 @@ class MoCapViewer(object):
 
     def add_skeleton(self, data: pd.DataFrame, skeleton_connection=None):
         features = data.shape[1]
-        assert features % 3 == 0, "Markers should have a multiple of 3 columns"
+        assert features % 3 == 0, f"Markers should have a multiple of 3 columns, received {features}"
         nr_markers = features // 3
 
         if type(skeleton_connection) == str:
-            get_skeleton_definition_for_camera(skeleton_connection)
+            skeleton_connection = get_skeleton_definition_for_camera(data, skeleton_connection)
 
         actors_markers = []  # Each marker has an own actor
         actors_bones = []  # Actors for each line segment between two markers
@@ -62,7 +66,7 @@ class MoCapViewer(object):
             sphere.SetPhiResolution(100)
             sphere.SetThetaResolution(100)
             sphere.SetCenter(0, 0, 0)
-            sphere.SetRadius(self._sphere_radius)
+            sphere.SetRadius(self.__sphere_radius)
             mapper = vtk.vtkPolyDataMapper()
             mapper.AddInputConnection(sphere.GetOutputPort())
             actor = vtk.vtkActor()
@@ -88,7 +92,7 @@ class MoCapViewer(object):
                 actors_bones.append(actor)
 
         # Invert y-coordinate axis for Azure Kinect data
-        data[data.filter(like='(y)').columns] *= -1
+        # data[data.filter(like='(y)').columns] *= -1
 
         self.__skeleton_objects.append({
             'data': data.to_numpy(),

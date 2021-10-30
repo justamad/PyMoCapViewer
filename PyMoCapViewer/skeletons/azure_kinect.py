@@ -1,1 +1,1 @@
-skeleton = []
+azure_skeleton = []

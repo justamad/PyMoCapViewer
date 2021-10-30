@@ -1,1 +1,1 @@
-skeleton = []
+kinect_skeleton = []

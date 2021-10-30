@@ -1,0 +1,1 @@
+from .skeleton_definition import get_skeleton_definition_for_camera

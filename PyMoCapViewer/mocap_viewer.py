@@ -4,8 +4,17 @@ from typing import List, Tuple, Union
 import vtk
 import pandas as pd
 import numpy as np
+import logging
 
 COLORS = ["red", "green", "blue"]
+
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s %(name)-8s %(levelname)-8s %(message)s',
+                    datefmt='%m-%d %H:%M:%S')
+
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+logging.getLogger('my_logger').addHandler(console)
 
 
 class MoCapViewer(object):
@@ -15,7 +24,7 @@ class MoCapViewer(object):
             width: int = 1280,
             height: int = 1024,
             sampling_frequency: int = 30,
-            sphere_radius: float = 0.01
+            sphere_radius: float = 0.01,
     ):
         self.__skeleton_objects = []
         self.__max_frames = float('inf')

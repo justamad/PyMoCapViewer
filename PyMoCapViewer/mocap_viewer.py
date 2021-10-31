@@ -1,4 +1,5 @@
 from .skeletons import get_skeleton_definition_for_camera
+from typing import List, Tuple, Union
 
 import vtk
 import pandas as pd
@@ -11,11 +12,23 @@ class MoCapViewer(object):
 
     def __init__(
             self,
-            sampling_frequency: int,
             width: int = 1280,
             height: int = 1024,
+            sampling_frequency: int = 30,
             sphere_radius: float = 0.01
     ):
+        self.__skeleton_objects = []
+        self.__max_frames = float('inf')
+        self.__cur_frame = 0
+        self.__pause = False
+        self.__record = False
+        self.__trans_vector = np.array([0, 0, 0])
+        self.__scale_factor = 1.0
+        self.__sphere_radius = sphere_radius
+        self.__axis_scale = 0.3
+        self.__video_count = 0
+        self.__sampling_frequency = sampling_frequency
+
         self.colors = vtk.vtkNamedColors()
         self.renderer = vtk.vtkRenderer()
         self.renderer.SetBackground(0, 0, 0)
@@ -28,37 +41,39 @@ class MoCapViewer(object):
         self.render_window_interactor = vtk.vtkRenderWindowInteractor()
         self.render_window_interactor.SetRenderWindow(self.render_window)
         self.render_window_interactor.Initialize()
-        self._timer_id = self.render_window_interactor.CreateRepeatingTimer(1000 // sampling_frequency)
+        self._timer_id = self.render_window_interactor.CreateRepeatingTimer(1000 // self.__sampling_frequency)
         self.render_window_interactor.AddObserver('KeyPressEvent', self.keypress_callback, 1.0)
 
         self.video_writer = vtk.vtkAVIWriter()
         self.image_filter = vtk.vtkWindowToImageFilter()
         self.image_filter.SetInput(self.render_window)
 
-        self.__skeleton_objects = []
-        self.__max_frames = float('inf')
-        self.__cur_frame = 0
-        self.__pause = False
-        self.__record = False
-        self.__trans_vector = np.array([0, 0, 0])
-        self.__scale_factor = 1.0
-        self.__sphere_radius = sphere_radius
-        self.__axis_scale = 0.3
-        self.__video_count = 0
-
         self._draw_coordinate_axes()
 
-    def add_skeleton(self, data: pd.DataFrame, skeleton_connection=None):
+    def add_skeleton(
+            self,
+            data: pd.DataFrame,
+            skeleton_connection: Union[str, List[Tuple[str, str]], List[Tuple[int, int]]] = None,
+            color: str = None,
+    ):
         features = data.shape[1]
-        assert features % 3 == 0, f"Markers should have a multiple of 3 columns, received {features}"
+        if features % 3 != 0:
+            raise ValueError(f"Column-number of dataframe should be a multiple of 3, received {features}.")
+
         nr_markers = features // 3
 
-        if type(skeleton_connection) == str:
+        if isinstance(skeleton_connection, str):
             skeleton_connection = get_skeleton_definition_for_camera(data, skeleton_connection)
 
         actors_markers = []  # Each marker has an own actor
         actors_bones = []  # Actors for each line segment between two markers
         lines = []
+
+        if color is not None:
+            if color not in self.colors.GetColorNames():
+                raise ValueError(f"Unknown color given: {color}.")
+        else:
+            color = COLORS[len(self.__skeleton_objects) % len(COLORS)]
 
         # Create all instances for all markers
         for marker in range(nr_markers):
@@ -71,7 +86,7 @@ class MoCapViewer(object):
             mapper.AddInputConnection(sphere.GetOutputPort())
             actor = vtk.vtkActor()
             actor.SetMapper(mapper)
-            actor.GetProperty().SetColor(self.colors.GetColor3d(COLORS[len(self.__skeleton_objects)]))
+            actor.GetProperty().SetColor(self.colors.GetColor3d(color))
             self.renderer.AddActor(actor)
             actors_markers.append(actor)
 
@@ -87,7 +102,7 @@ class MoCapViewer(object):
                 mapper.AddInputConnection(line.GetOutputPort())
                 actor = vtk.vtkActor()
                 actor.SetMapper(mapper)
-                actor.GetProperty().SetColor(self.colors.GetColor3d(COLORS[len(self.__skeleton_objects)]))
+                actor.GetProperty().SetColor(self.colors.GetColor3d(color))
                 self.renderer.AddActor(actor)
                 actors_bones.append(actor)
 
@@ -104,9 +119,13 @@ class MoCapViewer(object):
 
     def _calculate_bounding_box(self):
         data = np.concatenate(list(map(lambda x: x['data'].reshape(-1, 3), self.__skeleton_objects)))
-        min_vals = np.min(data, axis=0)
-        max_vals = np.max(data, axis=0)
-        self.__trans_vector = np.array([(min_vals[0] + max_vals[0]) / 2, min_vals[1], (min_vals[2] + max_vals[2]) / 2])
+        min_values = np.min(data, axis=0)
+        max_values = np.max(data, axis=0)
+        self.__trans_vector = np.array(
+            [(min_values[0] + max_values[0]) / 2,
+             min_values[1],
+             (min_values[2] + max_values[2]) / 2]
+        )
         self.__scale_factor = np.max(data - self.__trans_vector)
 
     def _draw_coordinate_axes(self):
@@ -139,7 +158,7 @@ class MoCapViewer(object):
     def _start_video(self):
         self.video_writer.SetFileName(f'video_{self.__video_count}.avi')
         self.video_writer.SetInputConnection(self.image_filter.GetOutputPort())
-        self.video_writer.SetRate(30)
+        self.video_writer.SetRate(self.__sampling_frequency)
         self.video_writer.SetQuality(2)
         self.video_writer.Start()
 

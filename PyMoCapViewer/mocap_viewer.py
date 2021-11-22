@@ -38,26 +38,22 @@ class MoCapViewer(object):
         self.__video_count = 0
         self.__sampling_frequency = sampling_frequency
 
-        self.colors = vtk.vtkNamedColors()
-        self.renderer = vtk.vtkRenderer()
-        self.renderer.SetBackground(0, 0, 0)
-        self.renderer.ResetCamera()
+        self.__colors = vtk.vtkNamedColors()
+        self.__renderer = vtk.vtkRenderer()
+        self.__renderer.SetBackground(0, 0, 0)
+        self.__renderer.ResetCamera()
 
-        self.render_window = vtk.vtkRenderWindow()
-        self.render_window.SetSize(width, height)
-        self.render_window.AddRenderer(self.renderer)
+        self.__render_window = vtk.vtkRenderWindow()
+        self.__render_window.SetSize(width, height)
+        self.__render_window.AddRenderer(self.__renderer)
 
-        self.render_window_interactor = vtk.vtkRenderWindowInteractor()
-        self.render_window_interactor.SetRenderWindow(self.render_window)
-        self.render_window_interactor.Initialize()
-        self._timer_id = self.render_window_interactor.CreateRepeatingTimer(1000 // self.__sampling_frequency)
-        self.render_window_interactor.AddObserver('KeyPressEvent', self.keypress_callback, 1.0)
+        self.__render_window_interactor = vtk.vtkRenderWindowInteractor()
+        self.__render_window_interactor.SetRenderWindow(self.__render_window)
+        self.__render_window_interactor.Initialize()
+        self.__timer_id = self.__render_window_interactor.CreateRepeatingTimer(1000 // self.__sampling_frequency)
+        self.__render_window_interactor.AddObserver('KeyPressEvent', self.keypress_callback, 1.0)
 
-        self.video_writer = vtk.vtkAVIWriter()
-        self.image_filter = vtk.vtkWindowToImageFilter()
-        self.image_filter.SetInput(self.render_window)
-
-        self._draw_coordinate_axes()
+        self.__draw_coordinate_axes()
 
     def add_skeleton(
             self,
@@ -65,27 +61,30 @@ class MoCapViewer(object):
             skeleton_connection: Union[str, List[Tuple[str, str]], List[Tuple[int, int]]] = None,
             color: str = None,
     ):
-        features = data.shape[1]
-        if features % 3 != 0:
-            raise ValueError(f"Column-number of dataframe should be a multiple of 3, received {features}.")
-
-        nr_markers = features // 3
+        columns = data.shape[1]
+        if columns % 3 != 0:
+            raise ValueError(f"Column-number of dataframe should be a multiple of 3, received {columns}.")
 
         if isinstance(skeleton_connection, str):
-            skeleton_connection = get_skeleton_definition_for_camera(data, skeleton_connection)
+            skeleton_connection = get_skeleton_definition_for_camera(
+                df=data,
+                camera_name=skeleton_connection,
+                camera_count=len(self.__skeleton_objects),
+            )
 
         actors_markers = []  # Each marker has an own actor
         actors_bones = []  # Actors for each line segment between two markers
         lines = []
 
         if color is not None:
-            if color not in self.colors.GetColorNames():
+            if color not in self.__colors.GetColorNames():
                 raise ValueError(f"Unknown color given: {color}.")
         else:
             color = COLORS[len(self.__skeleton_objects) % len(COLORS)]
 
         # Create all instances for all markers
-        for marker in range(nr_markers):
+        n_markers = columns // 3
+        for marker in range(n_markers):
             sphere = vtk.vtkSphereSource()
             sphere.SetPhiResolution(100)
             sphere.SetThetaResolution(100)
@@ -95,8 +94,8 @@ class MoCapViewer(object):
             mapper.AddInputConnection(sphere.GetOutputPort())
             actor = vtk.vtkActor()
             actor.SetMapper(mapper)
-            actor.GetProperty().SetColor(self.colors.GetColor3d(color))
-            self.renderer.AddActor(actor)
+            actor.GetProperty().SetColor(self.__colors.GetColor3d(color))
+            self.__renderer.AddActor(actor)
             actors_markers.append(actor)
 
         if skeleton_connection is not None:
@@ -111,12 +110,9 @@ class MoCapViewer(object):
                 mapper.AddInputConnection(line.GetOutputPort())
                 actor = vtk.vtkActor()
                 actor.SetMapper(mapper)
-                actor.GetProperty().SetColor(self.colors.GetColor3d(color))
-                self.renderer.AddActor(actor)
+                actor.GetProperty().SetColor(self.__colors.GetColor3d(color))
+                self.__renderer.AddActor(actor)
                 actors_bones.append(actor)
-
-        # Invert y-coordinate axis for Azure Kinect data
-        # data[data.filter(like='(y)').columns] *= -1
 
         self.__skeleton_objects.append({
             'data': data.to_numpy(),
@@ -137,19 +133,19 @@ class MoCapViewer(object):
         )
         self.__scale_factor = np.max(data - self.__trans_vector)
 
-    def _draw_coordinate_axes(self):
+    def __draw_coordinate_axes(self):
         axes = vtk.vtkAxesActor()
         axes.SetTotalLength(self.__axis_scale, self.__axis_scale, self.__axis_scale)
         axes.GetXAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
         axes.GetYAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
         axes.GetZAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
-        self.renderer.AddActor(axes)
+        self.__renderer.AddActor(axes)
 
     def show_window(self):
         self._calculate_bounding_box()
-        self.render_window_interactor.AddObserver('TimerEvent', self._update)
-        self.render_window.Render()
-        self.render_window_interactor.Start()
+        self.__render_window_interactor.AddObserver('TimerEvent', self._update)
+        self.__render_window.Render()
+        self.__render_window_interactor.Start()
 
     def _update(self, iren, event):
         if self.__cur_frame >= self.__max_frames:
@@ -158,26 +154,8 @@ class MoCapViewer(object):
         self._draw_new_frame(self.__cur_frame)
         iren.GetRenderWindow().Render()
 
-        if self.__record:
-            self._write_video()
-
         if not self.__pause:
             self.__cur_frame += 1
-
-    def _start_video(self):
-        self.video_writer.SetFileName(f'video_{self.__video_count}.avi')
-        self.video_writer.SetInputConnection(self.image_filter.GetOutputPort())
-        self.video_writer.SetRate(self.__sampling_frequency)
-        self.video_writer.SetQuality(2)
-        self.video_writer.Start()
-
-    def _write_video(self):
-        self.image_filter.Modified()
-        self.video_writer.Write()
-
-    def _close_video(self):
-        self.video_writer.End()
-        self.__video_count += 1
 
     def _draw_new_frame(self, index: int = 0):
         for skeleton_data in self.__skeleton_objects:
@@ -206,15 +184,8 @@ class MoCapViewer(object):
         elif key == 'Left':
             new_frame = self.__cur_frame - 1
             self.__cur_frame = new_frame if new_frame > 0 else self.__cur_frame
-            print(f"Current Frame: {self.__cur_frame}")
+            logging.info(f"Current Frame: {self.__cur_frame}")
         elif key == 'Right':
             new_frame = self.__cur_frame + 1
             self.__cur_frame = new_frame if new_frame < self.__max_frames else self.__cur_frame
-            print(f"Current Frame: {self.__cur_frame}")
-        elif key == 'v':
-            if self.__record:
-                self._close_video()
-                self.__record = False
-            else:
-                self._start_video()
-                self.__record = True
+            logging.info(f"Current Frame: {self.__cur_frame}")

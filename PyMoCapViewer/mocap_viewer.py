@@ -7,10 +7,18 @@ import numpy as np
 import logging
 
 COLORS = ["red", "green", "blue"]
+units = {
+    'mm': 1e-3,
+    'cm': 1e-2,
+    'dm': 1e-1,
+    'm': 1.0,
+}
 
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s %(name)-8s %(levelname)-8s %(message)s',
-                    datefmt='%m-%d %H:%M:%S')
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s %(name)-8s %(levelname)-8s %(message)s',
+    datefmt='%m-%d %H:%M:%S'
+)
 
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
@@ -24,7 +32,7 @@ class MoCapViewer(object):
             width: int = 1280,
             height: int = 1024,
             sampling_frequency: int = 30,
-            sphere_radius: float = 0.01,
+            sphere_radius: float = 0.015,
     ):
         self.__skeleton_objects = []
         self.__max_frames = float('inf')
@@ -60,10 +68,14 @@ class MoCapViewer(object):
             data: pd.DataFrame,
             skeleton_connection: Union[str, List[Tuple[str, str]], List[Tuple[int, int]]] = None,
             color: str = None,
+            unit: str = "mm",
     ):
         columns = data.shape[1]
         if columns % 3 != 0:
             raise ValueError(f"Column-number of dataframe should be a multiple of 3, received {columns}.")
+
+        if unit not in units:
+            raise ValueError(f"Unknown unit given: {unit}.")
 
         if isinstance(skeleton_connection, str):
             skeleton_connection = get_skeleton_definition_for_camera(
@@ -115,23 +127,12 @@ class MoCapViewer(object):
                 actors_bones.append(actor)
 
         self.__skeleton_objects.append({
-            'data': data.to_numpy(),
+            'data': data.to_numpy() * units[unit],
             'connections': skeleton_connection,
             'lines': lines,
             'actors_markers': actors_markers,
         })
         self.__max_frames = min(map(lambda x: len(x['data']), self.__skeleton_objects))
-
-    def _calculate_bounding_box(self):
-        data = np.concatenate(list(map(lambda x: x['data'].reshape(-1, 3), self.__skeleton_objects)))
-        min_values = np.min(data, axis=0)
-        max_values = np.max(data, axis=0)
-        self.__trans_vector = np.array(
-            [(min_values[0] + max_values[0]) / 2,
-             min_values[1],
-             (min_values[2] + max_values[2]) / 2]
-        )
-        self.__scale_factor = np.max(data - self.__trans_vector)
 
     def __draw_coordinate_axes(self):
         axes = vtk.vtkAxesActor()
@@ -142,7 +143,6 @@ class MoCapViewer(object):
         self.__renderer.AddActor(axes)
 
     def show_window(self):
-        self._calculate_bounding_box()
         self.__render_window_interactor.AddObserver('TimerEvent', self._update)
         self.__render_window.Render()
         self.__render_window_interactor.Start()

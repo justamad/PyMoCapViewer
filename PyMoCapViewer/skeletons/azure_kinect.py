@@ -9,10 +9,10 @@ azure_skeleton = [
     ],
     [
         "SPINE_CHEST",
-        "SPINE_NAVAL"
+        "SPINE_NAVEL"
     ],
     [
-        "SPINE_NAVAL",
+        "SPINE_NAVEL",
         "PELVIS"
     ],
     [

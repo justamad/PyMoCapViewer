@@ -33,6 +33,8 @@ class MoCapViewer(object):
             height: int = 1024,
             sampling_frequency: int = 30,
             sphere_radius: float = 0.015,
+            draw_grid: bool = True,
+            bg_color: str = "lightslategray"
     ):
         self.__skeleton_objects = []
         self.__max_frames = float('inf')
@@ -45,12 +47,12 @@ class MoCapViewer(object):
         self.__axis_scale = 0.3
         self.__video_count = 0
         self.__sampling_frequency = sampling_frequency
-        self.__grid_dimensions = 5
+        self.__grid_dimensions = 11
         self.__grid_cell_size = 0.6
 
         self.__colors = vtk.vtkNamedColors()
         self.__renderer = vtk.vtkRenderer()
-        self.__renderer.SetBackground(0, 0, 0)
+        self.__renderer.SetBackground(self.__colors.GetColor3d(bg_color))
         self.__renderer.ResetCamera()
 
         self.__render_window = vtk.vtkRenderWindow()
@@ -64,7 +66,9 @@ class MoCapViewer(object):
         self.__render_window_interactor.AddObserver('KeyPressEvent', self.keypress_callback, 1.0)
 
         self.__draw_coordinate_axes()
-        self.__draw_rectilinear_grid()
+
+        if draw_grid:
+            self.__draw_rectilinear_grid()
 
     def add_skeleton(
             self,

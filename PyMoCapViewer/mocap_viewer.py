@@ -45,6 +45,8 @@ class MoCapViewer(object):
         self.__axis_scale = 0.3
         self.__video_count = 0
         self.__sampling_frequency = sampling_frequency
+        self.__grid_dimensions = 5
+        self.__grid_cell_size = 0.6
 
         self.__colors = vtk.vtkNamedColors()
         self.__renderer = vtk.vtkRenderer()
@@ -62,6 +64,7 @@ class MoCapViewer(object):
         self.__render_window_interactor.AddObserver('KeyPressEvent', self.keypress_callback, 1.0)
 
         self.__draw_coordinate_axes()
+        self.__draw_rectilinear_grid()
 
     def add_skeleton(
             self,
@@ -141,6 +144,55 @@ class MoCapViewer(object):
         axes.GetYAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
         axes.GetZAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
         self.__renderer.AddActor(axes)
+
+    def __draw_rectilinear_grid(self):
+        for i in range(self.__grid_dimensions):
+            for j in range(self.__grid_dimensions):
+                actor = self.__create_single_cell(i, j)
+                self.__renderer.AddActor(actor)
+
+    def __create_single_cell(self, x_coord: int, y_coord: int):
+        offset = self.__grid_dimensions / 2 * self.__grid_cell_size
+
+        points = vtk.vtkPoints()
+        points.InsertNextPoint([
+            x_coord * self.__grid_cell_size - offset,
+            y_coord * self.__grid_cell_size - offset,
+            0])
+
+        points.InsertNextPoint([
+            (x_coord * self.__grid_cell_size + self.__grid_cell_size) - offset,
+            y_coord * self.__grid_cell_size - offset,
+            0])
+
+        points.InsertNextPoint([
+            (x_coord * self.__grid_cell_size + self.__grid_cell_size) - offset,
+            (y_coord * self.__grid_cell_size + self.__grid_cell_size) - offset,
+            0])
+
+        points.InsertNextPoint([
+            x_coord * self.__grid_cell_size - offset,
+            (y_coord * self.__grid_cell_size + self.__grid_cell_size) - offset,
+            0])
+
+        polyLine = vtk.vtkPolyLine()
+        polyLine.GetPointIds().SetNumberOfIds(5)
+        polyLine.GetPointIds().SetId(0, 0)
+        polyLine.GetPointIds().SetId(1, 1)
+        polyLine.GetPointIds().SetId(2, 2)
+        polyLine.GetPointIds().SetId(3, 3)
+        polyLine.GetPointIds().SetId(4, 0)
+
+        cells = vtk.vtkCellArray()
+        cells.InsertNextCell(polyLine)
+        poly_data = vtk.vtkPolyData()
+        poly_data.SetPoints(points)
+        poly_data.SetLines(cells)
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(poly_data)
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        return actor
 
     def show_window(self):
         self.__render_window_interactor.AddObserver('TimerEvent', self._update)

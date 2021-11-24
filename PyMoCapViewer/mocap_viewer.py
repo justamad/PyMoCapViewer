@@ -1,4 +1,5 @@
 from .skeletons import get_skeleton_definition_for_camera
+from .utils import create_xy_points, create_yz_points, create_xz_points
 from typing import List, Tuple, Union
 
 import vtk
@@ -12,6 +13,12 @@ units = {
     'cm': 1e-2,
     'dm': 1e-1,
     'm': 1.0,
+}
+
+planes = {
+    'xy': create_xy_points,
+    'yz': create_yz_points,
+    'xz': create_xz_points,
 }
 
 logging.basicConfig(
@@ -33,7 +40,7 @@ class MoCapViewer(object):
             height: int = 1024,
             sampling_frequency: int = 30,
             sphere_radius: float = 0.015,
-            draw_grid: bool = True,
+            grid_axis: str = "xy",
             bg_color: str = "lightslategray"
     ):
         self.__skeleton_objects = []
@@ -67,7 +74,11 @@ class MoCapViewer(object):
 
         self.__draw_coordinate_axes()
 
-        if draw_grid:
+        if grid_axis is not None:
+            if grid_axis not in planes:
+                raise AttributeError(f"Unknown grid axis given: {grid_axis}. Use 'xy', 'yz', or 'xz' or None")
+
+            self.__grid_creator = planes[grid_axis]
             self.__draw_rectilinear_grid()
 
     def add_skeleton(
@@ -159,25 +170,11 @@ class MoCapViewer(object):
         offset = self.__grid_dimensions / 2 * self.__grid_cell_size
 
         points = vtk.vtkPoints()
-        points.InsertNextPoint([
-            x_coord * self.__grid_cell_size - offset,
-            y_coord * self.__grid_cell_size - offset,
-            0])
-
-        points.InsertNextPoint([
-            (x_coord * self.__grid_cell_size + self.__grid_cell_size) - offset,
-            y_coord * self.__grid_cell_size - offset,
-            0])
-
-        points.InsertNextPoint([
-            (x_coord * self.__grid_cell_size + self.__grid_cell_size) - offset,
-            (y_coord * self.__grid_cell_size + self.__grid_cell_size) - offset,
-            0])
-
-        points.InsertNextPoint([
-            x_coord * self.__grid_cell_size - offset,
-            (y_coord * self.__grid_cell_size + self.__grid_cell_size) - offset,
-            0])
+        p1, p2, p3, p4 = self.__grid_creator(x_coord, y_coord, self.__grid_cell_size, offset)
+        points.InsertNextPoint(p1)
+        points.InsertNextPoint(p2)
+        points.InsertNextPoint(p3)
+        points.InsertNextPoint(p4)
 
         polyLine = vtk.vtkPolyLine()
         polyLine.GetPointIds().SetNumberOfIds(5)

@@ -1,6 +1,6 @@
 # PyMoCapViewer
 
-![Alt text](docs/PyMoCap.png?raw=true "PyMoCap")
+![Alt text](docs/title_image.PNG?raw=true "PyMoCap")
 
 A simple Python Motion Capture Viewer using the VTK toolkit. It is able to visualize trajectories from 3D markers given as a Pandas Dataframe. It also is able to draw connection between adjacent joints. Until now, it supports pre-defined joint connection for:
 

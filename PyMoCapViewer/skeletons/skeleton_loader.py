@@ -1,6 +1,7 @@
 from .vicon_plug_in_gait import vicon_skeleton
 from .kinect_v2 import kinect_skeleton
 from .azure_kinect import azure_skeleton
+from .vnect import vnect_skeleton
 
 from collections import OrderedDict
 
@@ -11,6 +12,7 @@ skeleton_definitions = {
     'vicon': vicon_skeleton,
     'azure': azure_skeleton,
     'kinect_v2': kinect_skeleton,
+    'vnect': vnect_skeleton,
 }
 
 

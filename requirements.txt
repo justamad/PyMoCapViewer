@@ -1,3 +1,5 @@
+wheel
+twine
 numpy
 pandas
 vtk

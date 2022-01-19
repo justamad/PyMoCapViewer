@@ -7,6 +7,7 @@ A simple Python Motion Capture Viewer using the VTK toolkit. It is able to visua
 - Vicon Plug-in Gait model
 - Microsoft Azure Kinect
 - Microsoft Kinect v2
+- VNect definition
 
 ## Example
 Load the kinematic data as a Pandas Dataframe. The columns should contain the joints in the following format: J1 (x), J1 (y), J1 (z), ..., JN (x), JN (y), JN (z).

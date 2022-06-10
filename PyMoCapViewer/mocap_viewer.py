@@ -1,24 +1,26 @@
 from .skeletons import get_skeleton_definition_for_camera
 from .utils import create_xy_points, create_yz_points, create_xz_points
 from typing import List, Tuple, Union
+from vtk.util.numpy_support import numpy_to_vtk, get_numpy_array_type, numpy_to_vtkIdTypeArray
 
-import vtk
 import pandas as pd
 import numpy as np
+import open3d as o3d
+import vtk
 import logging
 
 COLORS = ["red", "green", "blue"]
 units = {
-    'mm': 1e-3,
-    'cm': 1e-2,
-    'dm': 1e-1,
-    'm': 1.0,
+    "mm": 1e-3,
+    "cm": 1e-2,
+    "dm": 1e-1,
+    "m": 1.0,
 }
 
 planes = {
-    'xy': create_xy_points,
-    'yz': create_yz_points,
-    'xz': create_xz_points,
+    "xy": create_xy_points,
+    "yz": create_yz_points,
+    "xz": create_xz_points,
 }
 
 logging.basicConfig(
@@ -29,7 +31,7 @@ logging.basicConfig(
 
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
-logging.getLogger('my_logger').addHandler(console)
+logging.getLogger("my_logger").addHandler(console)
 
 
 class MoCapViewer(object):
@@ -39,12 +41,16 @@ class MoCapViewer(object):
             width: int = 1280,
             height: int = 1024,
             sampling_frequency: int = 30,
-            sphere_radius: float = 0.015,
+            sphere_radius: float = 0.03,
+            z_min: float = -10,
+            z_max: float = 10,
+            point_size: float = 3.0,
             grid_axis: str = "xy",
             bg_color: str = "lightslategray"
     ):
         self.__skeleton_objects = []
-        self.__max_frames = float('inf')
+        self.__point_cloud_objects = []
+        self.__max_frames = float("inf")
         self.__cur_frame = 0
         self.__pause = False
         self.__record = False
@@ -56,6 +62,9 @@ class MoCapViewer(object):
         self.__sampling_frequency = sampling_frequency
         self.__grid_dimensions = 11
         self.__grid_cell_size = 0.6
+        self.__z_min = z_min
+        self.__z_max = z_max
+        self.__point_size = point_size
 
         self.__colors = vtk.vtkNamedColors()
         self.__renderer = vtk.vtkRenderer()
@@ -70,7 +79,7 @@ class MoCapViewer(object):
         self.__render_window_interactor.SetRenderWindow(self.__render_window)
         self.__render_window_interactor.Initialize()
         self.__timer_id = self.__render_window_interactor.CreateRepeatingTimer(1000 // self.__sampling_frequency)
-        self.__render_window_interactor.AddObserver('KeyPressEvent', self.keypress_callback, 1.0)
+        self.__render_window_interactor.AddObserver("KeyPressEvent", self.keypress_callback, 1.0)
 
         self.__draw_coordinate_axes()
 
@@ -145,12 +154,54 @@ class MoCapViewer(object):
                 actors_bones.append(actor)
 
         self.__skeleton_objects.append({
-            'data': data.to_numpy() * units[unit],
-            'connections': skeleton_connection,
-            'lines': lines,
-            'actors_markers': actors_markers,
+            "data": data.to_numpy() * units[unit],
+            "connections": skeleton_connection,
+            "lines": lines,
+            "actors_markers": actors_markers,
         })
-        self.__max_frames = min(map(lambda x: len(x['data']), self.__skeleton_objects))
+        self.__max_frames = min(self.__max_frames, len(data))
+
+    def add_point_cloud_animation(
+            self,
+            point_cloud_list: List[o3d.geometry.PointCloud],
+            unit: str = "mm",
+    ):
+        vtk_poly_data = vtk.vtkPolyData()
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(vtk_poly_data)
+        mapper.SetColorModeToDefault()
+        mapper.SetScalarRange(self.__z_min, self.__z_max)
+        mapper.SetScalarVisibility(1)
+        vtk_actor = vtk.vtkActor()
+        vtk_actor.SetMapper(mapper)
+        vtk_actor.GetProperty().SetPointSize(self.__point_size)
+        self.__renderer.AddActor(vtk_actor)
+
+        vtk_points = vtk.vtkPoints()
+        vtk_cells = vtk.vtkCellArray()
+        vtk_poly_data.SetPoints(vtk_points)
+        vtk_poly_data.SetVerts(vtk_cells)
+
+        f_point_clouds = []
+        for pcd in point_cloud_list:
+            point_data = np.asarray(pcd.points) * units[unit]
+            color_data = (np.asarray(pcd.colors) * 255).astype(np.uint8)
+            n_points = len(point_data)
+
+            if n_points > 50000:
+                logging.warning(f"Point cloud has large number of points: {n_points}. Visualization might be slow.")
+
+            f_point_clouds.append({
+                "data": numpy_to_vtk(point_data),
+                "color": numpy_to_vtk(color_data),
+                "n_points": n_points,
+            })
+
+        self.__point_cloud_objects.append({
+            "point_data": f_point_clouds,
+            "vtk_poly_data": vtk_poly_data,
+        })
+        self.__max_frames = min(self.__max_frames, len(point_cloud_list))
 
     def __draw_coordinate_axes(self):
         axes = vtk.vtkAxesActor()
@@ -211,6 +262,26 @@ class MoCapViewer(object):
             self.__cur_frame += 1
 
     def _draw_new_frame(self, index: int = 0):
+        for pcd_data in self.__point_cloud_objects:
+            vtk_poly_data = pcd_data["vtk_poly_data"]
+            pcd_info = pcd_data["point_data"][index]
+            pc, n_data, colors = pcd_info["data"], pcd_info["n_points"], pcd_info["color"]
+
+            vtk_points = vtk.vtkPoints()
+            vtk_cells = vtk.vtkCellArray()
+            vtk_poly_data.SetPoints(vtk_points)
+            vtk_poly_data.SetVerts(vtk_cells)
+            vtk_points.SetNumberOfPoints(n_data)
+            vtk_points.SetData(pc)
+            vtk_poly_data.GetPointData().SetScalars(colors)
+
+            for n in range(n_data):
+                vtk_cells.InsertNextCell(1)
+                vtk_cells.InsertCellPoint(n)
+
+            vtk_cells.Modified()
+            vtk_points.Modified()
+
         for skeleton_data in self.__skeleton_objects:
             data = skeleton_data['data']
             actors_markers = skeleton_data['actors_markers']

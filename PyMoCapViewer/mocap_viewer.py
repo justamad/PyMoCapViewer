@@ -76,6 +76,7 @@ class MoCapViewer(object):
         self.__render_window.AddRenderer(self.__renderer)
 
         self.__render_window_interactor = vtk.vtkRenderWindowInteractor()
+        self.__render_window_interactor.GetInteractorStyle().SetCurrentStyleToTrackballCamera()
         self.__render_window_interactor.SetRenderWindow(self.__render_window)
         self.__render_window_interactor.Initialize()
         self.__timer_id = self.__render_window_interactor.CreateRepeatingTimer(1000 // self.__sampling_frequency)

@@ -94,6 +94,7 @@ class MoCapViewer(object):
     def add_skeleton(
             self,
             data: pd.DataFrame,
+            skeleton_orientations: np.ndarray = None,
             skeleton_connection: Union[str, List[Tuple[str, str]], List[Tuple[int, int]]] = None,
             color: str = None,
             unit: str = "mm",
@@ -101,6 +102,16 @@ class MoCapViewer(object):
         columns = data.shape[1]
         if columns % 3 != 0:
             raise ValueError(f"Column-number of dataframe should be a multiple of 3, received {columns}.")
+
+        if skeleton_orientations is not None:
+            if len(skeleton_orientations.shape) != 4:
+                raise AttributeError("Please pass orientation as np.ndarray with (nr_frames, nr_markers, 3, 3)")
+
+            if len(skeleton_orientations) != len(data):
+                raise AttributeError(f"Position and orientation data have different lengths:"
+                                     f" {len(skeleton_orientations)} vs {len(data)}.")
+
+        n_markers = columns // 3
 
         if unit not in units:
             raise ValueError(f"Unknown unit given: {unit}.")
@@ -113,7 +124,6 @@ class MoCapViewer(object):
             )
 
         actors_markers = []  # Each marker has an own actor
-        actors_bones = []  # Actors for each line segment between two markers
         lines = []
 
         if color is not None:
@@ -123,7 +133,6 @@ class MoCapViewer(object):
             color = COLORS[len(self.__skeleton_objects) % len(COLORS)]
 
         # Create all instances for all markers
-        n_markers = columns // 3
         for marker in range(n_markers):
             sphere = vtk.vtkSphereSource()
             sphere.SetPhiResolution(100)
@@ -140,25 +149,23 @@ class MoCapViewer(object):
 
         if skeleton_connection is not None:
             for _ in skeleton_connection:
-                line = vtk.vtkLineSource()
-                line.SetPoint1(0, 0, 0)
-                line.SetPoint2(0, 0, 0)
+                line = self.__create_line_vtk_object(color)
                 lines.append(line)
 
-                # Setup actor and mapper
-                mapper = vtk.vtkPolyDataMapper()
-                mapper.AddInputConnection(line.GetOutputPort())
-                actor = vtk.vtkActor()
-                actor.SetMapper(mapper)
-                actor.GetProperty().SetColor(self.__colors.GetColor3d(color))
-                self.__renderer.AddActor(actor)
-                actors_bones.append(actor)
+        coordinate_axes = []
+        if skeleton_orientations is not None:
+            for _ in range(n_markers):
+                coordinate_axes.append(self.__create_line_vtk_object("red"))
+                coordinate_axes.append(self.__create_line_vtk_object("green"))
+                coordinate_axes.append(self.__create_line_vtk_object("blue"))
 
         self.__skeleton_objects.append({
             "data": data.to_numpy() * units[unit],
-            "connections": skeleton_connection,
-            "lines": lines,
+            "ori_data": skeleton_orientations * 1e-1,
+            "skeleton_definition": skeleton_connection,
+            "bone_actors": lines,
             "actors_markers": actors_markers,
+            "coordinate_axes": coordinate_axes,
         })
         self.__max_frames = min(self.__max_frames, len(data))
 
@@ -284,23 +291,37 @@ class MoCapViewer(object):
             vtk_points.Modified()
 
         for skeleton_data in self.__skeleton_objects:
-            data = skeleton_data['data']
-            actors_markers = skeleton_data['actors_markers']
+            data = skeleton_data["data"]
+            actors_markers = skeleton_data["actors_markers"]
             points = (data[index].reshape(-1, 3) - self.__trans_vector) / self.__scale_factor
 
-            for c_points, actor in enumerate(actors_markers):
-                x, y, z = points[c_points]
+            for marker_idx, actor in enumerate(actors_markers):
+                x, y, z = points[marker_idx]
                 actor.SetPosition(x, y, z)
 
             # Update bone connections
-            bones = skeleton_data['connections']
-            lines = skeleton_data['lines']
-            if bones is None:
+            joint_connections = skeleton_data["skeleton_definition"]
+            lines = skeleton_data["bone_actors"]
+            if joint_connections is not None:
+                for line, (j1, j2) in zip(lines, joint_connections):
+                    line.SetPoint1(points[j1])
+                    line.SetPoint2(points[j2])
+
+            # Update local coordinate axes
+            coordinate_axes = skeleton_data["coordinate_axes"]
+            ori_data = skeleton_data["ori_data"]
+            if ori_data is None:
                 continue
 
-            for line, (j1, j2) in zip(lines, bones):
-                line.SetPoint1(points[j1])
-                line.SetPoint2(points[j2])
+            ori_data = ori_data[index]
+            for marker_idx, marker_pos in enumerate(points):
+                cur_point = points[marker_idx]
+                cur_ori = ori_data[marker_idx]
+                for axis_idx in range(3):
+                    x_axis = cur_ori[:, axis_idx]
+                    line_obj = coordinate_axes[marker_idx * 3 + axis_idx]
+                    line_obj.SetPoint1(cur_point)
+                    line_obj.SetPoint2(cur_point + x_axis)
 
     def keypress_callback(self, obj, ev):
         key = obj.GetKeySym()
@@ -314,3 +335,15 @@ class MoCapViewer(object):
             new_frame = self.__cur_frame + 1
             self.__cur_frame = new_frame if new_frame < self.__max_frames else self.__cur_frame
             logging.info(f"Current Frame: {self.__cur_frame}")
+
+    def __create_line_vtk_object(self, color) -> vtk.vtkLineSource:
+        line = vtk.vtkLineSource()
+        line.SetPoint1(0, 0, 0)
+        line.SetPoint2(0, 0, 0)
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.AddInputConnection(line.GetOutputPort())
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.GetProperty().SetColor(self.__colors.GetColor3d(color))
+        self.__renderer.AddActor(actor)
+        return line

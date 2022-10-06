@@ -154,6 +154,7 @@ class MoCapViewer(object):
 
         coordinate_axes = []
         if skeleton_orientations is not None:
+            skeleton_orientations = skeleton_orientations * 1e-1
             for _ in range(n_markers):
                 coordinate_axes.append(self.__create_line_vtk_object("red"))
                 coordinate_axes.append(self.__create_line_vtk_object("green"))
@@ -161,7 +162,7 @@ class MoCapViewer(object):
 
         self.__skeleton_objects.append({
             "data": data.to_numpy() * units[unit],
-            "ori_data": skeleton_orientations * 1e-1,
+            "ori_data": skeleton_orientations,
             "skeleton_definition": skeleton_connection,
             "bone_actors": lines,
             "actors_markers": actors_markers,

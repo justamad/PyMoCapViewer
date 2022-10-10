@@ -1,7 +1,8 @@
 from .skeletons import get_skeleton_definition_for_camera
 from .utils import create_xy_points, create_yz_points, create_xz_points
 from typing import List, Tuple, Union
-from vtk.util.numpy_support import numpy_to_vtk, get_numpy_array_type, numpy_to_vtkIdTypeArray
+from vtk.util.numpy_support import numpy_to_vtk
+from vtkmodules.vtkRenderingCore import vtkTextActor
 
 import pandas as pd
 import numpy as np
@@ -64,6 +65,8 @@ class MoCapViewer(object):
         self.__grid_cell_size = 0.6
         self.__z_min = z_min
         self.__z_max = z_max
+        self.__width = width
+        self.__height = height
         self.__point_size = point_size
 
         self.__colors = vtk.vtkNamedColors()
@@ -203,6 +206,29 @@ class MoCapViewer(object):
             "vtk_poly_data": vtk_poly_data,
         })
         self.__max_frames = min(self.__max_frames, len(point_cloud_list))
+
+    def add_text(
+            self, 
+            display_text: str, 
+            color: str, 
+            x: int = 20, 
+            y: int = 150
+    ):
+        if color is not None:
+            if color not in self.__colors.GetColorNames():
+                raise ValueError(f"Unknown color given: {color}.")
+
+        # Create a TextActor for roll (a6 actor's color).
+        text = vtkTextActor()
+        text.SetInput(display_text)
+        tprop = text.GetTextProperty()
+        tprop.SetFontFamilyToArial()
+        tprop.ShadowOff()
+        tprop.SetLineSpacing(1.0)
+        tprop.SetFontSize(36)
+        tprop.SetColor(self.__colors.GetColor3d(color))
+        text.SetDisplayPosition(x, y)
+        self.__renderer.AddActor2D(text)
 
     def __draw_coordinate_axes(self):
         axes = vtk.vtkAxesActor()

@@ -12,4 +12,5 @@ setup(
     author_email='justin.albert@hpi.de',
     url='https://github.com/justamad/PyMoCapViewer',
     packages=setuptools.find_packages(),
+    install_requires=['vtk', 'open3d', 'numpy', 'pandas'],
 )

@@ -10,6 +10,7 @@ import vtk
 import logging
 
 COLORS = ["red", "green", "blue"]
+
 units = {
     "mm": 1e-3,
     "cm": 1e-2,
@@ -93,15 +94,27 @@ class MoCapViewer(object):
 
     def add_skeleton(
             self,
-            data: pd.DataFrame,
+            data: Union[np.ndarray, pd.DataFrame],
             skeleton_orientations: np.ndarray = None,
-            skeleton_connection: Union[str, List[Tuple[str, str]], List[Tuple[int, int]]] = None,
+            skeleton_connection: Union[str, List[Tuple[int]]] = None,
             color: str = None,
             unit: str = "mm",
     ):
-        columns = data.shape[1]
-        if columns % 3 != 0:
-            raise ValueError(f"Column-number of dataframe should be a multiple of 3, received {columns}.")
+        if len(data.shape) != 2:
+            raise AttributeError(f"Data container has wrong dimensions. Given: {data.shape}, Expected: 2")
+
+        if data.shape[1] % 3 != 0:
+            raise ValueError(f"Column-number of dataframe should be a multiple of 3, received {data.shape[1]}.")
+
+        if isinstance(data, pd.DataFrame):
+            if isinstance(skeleton_connection, str):
+                skeleton_connection = get_skeleton_definition_for_camera(
+                    columns=list(data.columns),
+                    camera_name=skeleton_connection,
+                    camera_count=len(self.__skeleton_objects),
+                )
+
+            data = data.to_numpy()
 
         if skeleton_orientations is not None:
             if len(skeleton_orientations.shape) != 4:
@@ -111,18 +124,10 @@ class MoCapViewer(object):
                 raise AttributeError(f"Position and orientation data have different lengths:"
                                      f" {len(skeleton_orientations)} vs {len(data)}.")
 
-        n_markers = columns // 3
-
         if unit not in units:
             raise ValueError(f"Unknown unit given: {unit}.")
 
-        if isinstance(skeleton_connection, str):
-            skeleton_connection = get_skeleton_definition_for_camera(
-                df=data,
-                camera_name=skeleton_connection,
-                camera_count=len(self.__skeleton_objects),
-            )
-
+        n_markers = data.shape[1] // 3
         actors_markers = []  # Each marker has an own actor
         lines = []
 
@@ -161,7 +166,7 @@ class MoCapViewer(object):
                 coordinate_axes.append(self.__create_line_vtk_object("blue"))
 
         self.__skeleton_objects.append({
-            "data": data.to_numpy() * units[unit],
+            "data": data * units[unit],
             "ori_data": skeleton_orientations,
             "skeleton_definition": skeleton_connection,
             "bone_actors": lines,

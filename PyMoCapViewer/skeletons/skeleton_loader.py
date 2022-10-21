@@ -4,9 +4,9 @@ from .azure_kinect import azure_skeleton
 from .vnect import vnect_skeleton
 from .ghum import ghum_skeleton
 
+from typing import List
 from collections import OrderedDict
 
-import pandas as pd
 import logging
 
 skeleton_definitions = {
@@ -19,7 +19,7 @@ skeleton_definitions = {
 
 
 def get_skeleton_definition_for_camera(
-        df: pd.DataFrame,
+        columns: List,
         camera_name: str,
         camera_count: int,
 ):
@@ -30,7 +30,7 @@ def get_skeleton_definition_for_camera(
     joint_definition = skeleton_definitions[camera_name]
     joint_definition = list(map(lambda x: list(map(str.lower, x)), joint_definition))
 
-    joint_names = get_joints_as_list(df)
+    joint_names = get_joints_as_list(columns)
 
     skeleton = []
     for j1, j2 in joint_definition:
@@ -43,8 +43,8 @@ def get_skeleton_definition_for_camera(
     return skeleton
 
 
-def get_joints_as_list(df: pd.DataFrame) -> list:
+def get_joints_as_list(columns: List) -> List:
     """ Returns list of joints by removing axis """
-    columns = [column.replace(column[column.find(" ("):column.find(")") + 1], "") for column in df.columns]
+    columns = [column.replace(column[column.find(" ("):column.find(")") + 1], "") for column in columns]
     joints = list(OrderedDict.fromkeys(columns))
     return list(map(str.lower, joints))

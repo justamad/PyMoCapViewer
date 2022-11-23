@@ -341,6 +341,9 @@ class MoCapViewer(object):
             new_frame = self.__cur_frame + 1
             self.__cur_frame = new_frame if new_frame < self.__max_frames else self.__cur_frame
             logging.info(f"Current Frame: {self.__cur_frame}")
+        elif key == '0':
+            self.__cur_frame = 0
+            logging.info("Back to frame 0")
 
     def __create_line_vtk_object(self, color) -> vtk.vtkLineSource:
         line = vtk.vtkLineSource()

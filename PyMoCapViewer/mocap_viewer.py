@@ -334,16 +334,16 @@ class MoCapViewer(object):
         if key == 'space':
             self.__pause = not self.__pause
         elif key == 'Left':
-            new_frame = self.__cur_frame - 1
-            self.__cur_frame = new_frame if new_frame > 0 else self.__cur_frame
+            self.__cur_frame = (self.__cur_frame - 1) % self.__max_frames
             logging.info(f"Current Frame: {self.__cur_frame}")
         elif key == 'Right':
-            new_frame = self.__cur_frame + 1
-            self.__cur_frame = new_frame if new_frame < self.__max_frames else self.__cur_frame
+            self.__cur_frame = (self.__cur_frame + 1) % self.__max_frames
             logging.info(f"Current Frame: {self.__cur_frame}")
         elif key == '0':
             self.__cur_frame = 0
             logging.info("Back to frame 0")
+        elif key == 'i':
+            logging.info(f"Current frame: {self.__cur_frame}")
 
     def __create_line_vtk_object(self, color) -> vtk.vtkLineSource:
         line = vtk.vtkLineSource()

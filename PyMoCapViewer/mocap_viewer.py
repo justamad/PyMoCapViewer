@@ -1,7 +1,14 @@
 from .skeletons import get_skeleton_definition_for_camera
-from .utils import create_xy_points, create_yz_points, create_xz_points
 from typing import List, Tuple, Union
 from vtk.util.numpy_support import numpy_to_vtk, get_numpy_array_type, numpy_to_vtkIdTypeArray
+
+from .utils import (
+    create_xy_points,
+    create_yz_points,
+    create_xz_points,
+    create_orientations_from_euler_angles,
+    create_orientations_from_quaternions,
+)
 
 import pandas as pd
 import numpy as np
@@ -46,7 +53,7 @@ class MoCapViewer(object):
             z_min: float = -10,
             z_max: float = 10,
             point_size: float = 3.0,
-            grid_axis: str = "xy",
+            grid_axis: Union[str, None] = "xy",
             bg_color: str = "lightslategray"
     ):
         self.__skeleton_objects = []
@@ -96,8 +103,9 @@ class MoCapViewer(object):
             self,
             data: Union[np.ndarray, pd.DataFrame],
             skeleton_orientations: np.ndarray = None,
-            skeleton_connection: Union[str, List[Tuple[int]]] = None,
+            skeleton_connection: Union[str, List[Tuple[int, int]]] = None,
             color: str = None,
+            orientation: str = "quaternion",
             unit: str = "mm",
     ):
         if len(data.shape) != 2:
@@ -117,12 +125,16 @@ class MoCapViewer(object):
             data = data.to_numpy()
 
         if skeleton_orientations is not None:
-            if len(skeleton_orientations.shape) != 4:
-                raise AttributeError("Please pass orientation as np.ndarray with (nr_frames, nr_markers, 3, 3)")
-
             if len(skeleton_orientations) != len(data):
                 raise AttributeError(f"Position and orientation data have different lengths:"
                                      f" {len(skeleton_orientations)} vs {len(data)}.")
+
+            if orientation == "quaternion":
+                skeleton_orientations = create_orientations_from_quaternions(skeleton_orientations)
+            elif orientation == "euler":
+                skeleton_orientations = create_orientations_from_euler_angles(skeleton_orientations)
+            else:
+                raise AttributeError(f"Unknown orientation type: {orientation}")
 
         if unit not in units:
             raise ValueError(f"Unknown unit given: {unit}.")

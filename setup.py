@@ -6,11 +6,11 @@ import setuptools
 
 setup(
     name='PyMoCapViewer',
-    version='0.0.10',
+    version='0.0.11',
     description='A simple MoCap Viewer',
     author='Justin Albert',
     author_email='justin.albert@hpi.de',
     url='https://github.com/justamad/PyMoCapViewer',
     packages=setuptools.find_packages(),
-    install_requires=['vtk', 'open3d', 'numpy', 'pandas'],
+    install_requires=['vtk', 'open3d', 'numpy', 'pandas', 'scipy'],
 )

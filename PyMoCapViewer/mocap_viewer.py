@@ -102,7 +102,7 @@ class MoCapViewer(object):
     def add_skeleton(
             self,
             data: Union[np.ndarray, pd.DataFrame],
-            skeleton_orientations: np.ndarray = None,
+            skeleton_orientations: Union[np.ndarray, pd.DataFrame] = None,
             skeleton_connection: Union[str, List[Tuple[int, int]]] = None,
             color: str = None,
             orientation: str = "quaternion",

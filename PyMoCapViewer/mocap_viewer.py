@@ -1,7 +1,8 @@
 from .skeletons import get_skeleton_definition_for_camera
 from typing import List, Tuple, Union
 from vtk.util.numpy_support import numpy_to_vtk, get_numpy_array_type, numpy_to_vtkIdTypeArray
-
+from vtkmodules.vtkIOImage import vtkPNGWriter
+from datetime import datetime
 from .utils import (
     create_xy_points,
     create_yz_points,
@@ -356,6 +357,10 @@ class MoCapViewer(object):
             logging.info("Back to frame 0")
         elif key == 'i':
             logging.info(f"Current frame: {self.__cur_frame}")
+        elif key == 'q':
+            self.__render_window_interactor.ExitCallback()
+        elif key == "s":
+            self.__save_screenshot()
 
     def __create_line_vtk_object(self, color) -> vtk.vtkLineSource:
         line = vtk.vtkLineSource()
@@ -368,3 +373,16 @@ class MoCapViewer(object):
         actor.GetProperty().SetColor(self.__colors.GetColor3d(color))
         self.__renderer.AddActor(actor)
         return line
+
+    def __save_screenshot(self):
+        w2if = vtk.vtkWindowToImageFilter()
+        w2if.SetInput(self.__render_window)
+        w2if.SetInputBufferTypeToRGB()
+        w2if.ReadFrontBufferOff()
+        w2if.Update()
+
+        writer = vtkPNGWriter()
+        writer.SetCompressionLevel(0)
+        writer.SetFileName(f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.png")
+        writer.SetInputConnection(w2if.GetOutputPort())
+        writer.Write()

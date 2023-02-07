@@ -1,7 +1,8 @@
 from .skeletons import get_skeleton_definition_for_camera
 from typing import List, Tuple, Union
 from vtk.util.numpy_support import numpy_to_vtk, get_numpy_array_type, numpy_to_vtkIdTypeArray
-
+from vtkmodules.vtkIOImage import vtkPNGWriter
+from datetime import datetime
 from .utils import (
     create_xy_points,
     create_yz_points,
@@ -90,6 +91,17 @@ class MoCapViewer(object):
         self.__timer_id = self.__render_window_interactor.CreateRepeatingTimer(1000 // self.__sampling_frequency)
         self.__render_window_interactor.AddObserver("KeyPressEvent", self.keypress_callback, 1.0)
 
+        # Screen capture utilities
+        self.__win_to_img_filter = vtk.vtkWindowToImageFilter()
+        self.__win_to_img_filter.SetInput(self.__render_window)
+        self.__win_to_img_filter.SetInputBufferTypeToRGB()
+        self.__win_to_img_filter.ReadFrontBufferOff()
+        self.__win_to_img_filter.Update()
+
+        self.__is_screen_capture = False
+        self.__movie_writer = vtk.vtkOggTheoraWriter()
+        self.__movie_writer.SetInputConnection(self.__win_to_img_filter.GetOutputPort())
+
         self.__draw_coordinate_axes()
 
         if grid_axis is not None:
@@ -128,6 +140,9 @@ class MoCapViewer(object):
             if len(skeleton_orientations) != len(data):
                 raise AttributeError(f"Position and orientation data have different lengths:"
                                      f" {len(skeleton_orientations)} vs {len(data)}.")
+
+            if isinstance(skeleton_orientations, pd.DataFrame):
+                skeleton_orientations = skeleton_orientations.to_numpy()
 
             if orientation == "quaternion":
                 skeleton_orientations = create_orientations_from_quaternions(skeleton_orientations)
@@ -341,6 +356,10 @@ class MoCapViewer(object):
                     line_obj.SetPoint1(cur_point)
                     line_obj.SetPoint2(cur_point + x_axis)
 
+        if self.__is_screen_capture:
+            self.__win_to_img_filter.Modified()
+            self.__movie_writer.Write()
+
     def keypress_callback(self, obj, ev):
         key = obj.GetKeySym()
         if key == 'space':
@@ -356,6 +375,12 @@ class MoCapViewer(object):
             logging.info("Back to frame 0")
         elif key == 'i':
             logging.info(f"Current frame: {self.__cur_frame}")
+        elif key == 'q':
+            self.__render_window_interactor.ExitCallback()
+        elif key == "s":
+            self.__save_screenshot()
+        elif key == 'Return':
+            self.__record_screen_video()
 
     def __create_line_vtk_object(self, color) -> vtk.vtkLineSource:
         line = vtk.vtkLineSource()
@@ -368,3 +393,30 @@ class MoCapViewer(object):
         actor.GetProperty().SetColor(self.__colors.GetColor3d(color))
         self.__renderer.AddActor(actor)
         return line
+
+    def __save_screenshot(self):
+        w2if = vtk.vtkWindowToImageFilter()
+        w2if.SetInput(self.__render_window)
+        w2if.SetInputBufferTypeToRGB()
+        w2if.ReadFrontBufferOff()
+        w2if.Update()
+
+        file_name = f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.png"
+        writer = vtkPNGWriter()
+        writer.SetCompressionLevel(0)
+        writer.SetFileName(file_name)
+        writer.SetInputConnection(w2if.GetOutputPort())
+        writer.Write()
+        logging.info(f"Screenshot saved as {file_name}")
+
+    def __record_screen_video(self):
+        if not self.__is_screen_capture:
+            file_name = f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.mp4"
+            logging.info(f"Video capture started: {file_name}")
+            self.__movie_writer.SetFileName(file_name)
+            self.__movie_writer.Start()
+            self.__is_screen_capture = True
+        else:
+            logging.info("Video capture stopped...")
+            self.__movie_writer.End()
+            self.__is_screen_capture = False

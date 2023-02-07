@@ -52,7 +52,7 @@ def create_orientations_from_quaternions(data: Union[pd.DataFrame, np.ndarray]) 
     for frame in range(data.shape[0]):
         joint_rotation = []
         for joint in range(data.shape[1] // 4):
-            w, x, y, z = np.array(data.iloc[frame, joint * 4:joint * 4 + 4])
+            w, x, y, z = np.array(data[frame, joint * 4:joint * 4 + 4])
             rot = R.from_quat([x, y, z, w])
             joint_rotation.append(rot.as_matrix())
 
@@ -69,7 +69,7 @@ def create_orientations_from_euler_angles(data: Union[pd.DataFrame, np.ndarray])
     for frame in range(data.shape[0]):
         joint_rotation = []
         for joint in range(data.shape[1] // 3):
-            rotation = R.from_euler("xyz", data.iloc[frame, joint * 3: (joint + 1) * 3])
+            rotation = R.from_euler("xyz", data[frame, joint * 3: (joint + 1) * 3])
             joint_rotation.append(rotation.as_matrix())
 
         rotation_frames.append(joint_rotation)

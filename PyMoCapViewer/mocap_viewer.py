@@ -1,7 +1,15 @@
 from .skeletons import get_skeleton_definition_for_camera
-from .utils import create_xy_points, create_yz_points, create_xz_points
 from typing import List, Tuple, Union
 from vtk.util.numpy_support import numpy_to_vtk, get_numpy_array_type, numpy_to_vtkIdTypeArray
+from vtkmodules.vtkIOImage import vtkPNGWriter
+from datetime import datetime
+from .utils import (
+    create_xy_points,
+    create_yz_points,
+    create_xz_points,
+    create_orientations_from_euler_angles,
+    create_orientations_from_quaternions,
+)
 
 import pandas as pd
 import numpy as np
@@ -46,7 +54,7 @@ class MoCapViewer(object):
             z_min: float = -10,
             z_max: float = 10,
             point_size: float = 3.0,
-            grid_axis: str = "xy",
+            grid_axis: Union[str, None] = "xy",
             bg_color: str = "lightslategray",
             pause: bool = False,
             start_frame: int = 0
@@ -85,6 +93,17 @@ class MoCapViewer(object):
         self.__timer_id = self.__render_window_interactor.CreateRepeatingTimer(1000 // self.__sampling_frequency)
         self.__render_window_interactor.AddObserver("KeyPressEvent", self.keypress_callback, 1.0)
 
+        # Screen capture utilities
+        self.__win_to_img_filter = vtk.vtkWindowToImageFilter()
+        self.__win_to_img_filter.SetInput(self.__render_window)
+        self.__win_to_img_filter.SetInputBufferTypeToRGB()
+        self.__win_to_img_filter.ReadFrontBufferOff()
+        self.__win_to_img_filter.Update()
+
+        self.__is_screen_capture = False
+        self.__movie_writer = vtk.vtkOggTheoraWriter()
+        self.__movie_writer.SetInputConnection(self.__win_to_img_filter.GetOutputPort())
+
         self.__draw_coordinate_axes()
 
         if grid_axis is not None:
@@ -97,9 +116,10 @@ class MoCapViewer(object):
     def add_skeleton(
             self,
             data: Union[np.ndarray, pd.DataFrame],
-            skeleton_orientations: np.ndarray = None,
-            skeleton_connection: Union[str, List[Tuple[int]]] = None,
+            skeleton_orientations: Union[np.ndarray, pd.DataFrame] = None,
+            skeleton_connection: Union[str, List[Tuple[int, int]]] = None,
             color: str = None,
+            orientation: str = "quaternion",
             unit: str = "mm",
             show_labels: bool = False,
     ):
@@ -122,12 +142,19 @@ class MoCapViewer(object):
             data = data.to_numpy()
 
         if skeleton_orientations is not None:
-            if len(skeleton_orientations.shape) != 4:
-                raise AttributeError("Please pass orientation as np.ndarray with (nr_frames, nr_markers, 3, 3)")
-
             if len(skeleton_orientations) != len(data):
                 raise AttributeError(f"Position and orientation data have different lengths:"
                                      f" {len(skeleton_orientations)} vs {len(data)}.")
+
+            if isinstance(skeleton_orientations, pd.DataFrame):
+                skeleton_orientations = skeleton_orientations.to_numpy()
+
+            if orientation == "quaternion":
+                skeleton_orientations = create_orientations_from_quaternions(skeleton_orientations)
+            elif orientation == "euler":
+                skeleton_orientations = create_orientations_from_euler_angles(skeleton_orientations)
+            else:
+                raise AttributeError(f"Unknown orientation type: {orientation}")
 
         if unit not in units:
             raise ValueError(f"Unknown unit given: {unit}.")
@@ -356,21 +383,31 @@ class MoCapViewer(object):
                     line_obj.SetPoint1(cur_point)
                     line_obj.SetPoint2(cur_point + x_axis)
 
+        if self.__is_screen_capture:
+            self.__win_to_img_filter.Modified()
+            self.__movie_writer.Write()
+
     def keypress_callback(self, obj, ev):
         key = obj.GetKeySym()
         if key == 'space':
             self.__pause = not self.__pause
         elif key == 'Left':
-            new_frame = self.__cur_frame - 1
-            self.__cur_frame = new_frame if new_frame > 0 else self.__cur_frame
+            self.__cur_frame = (self.__cur_frame - 1) % self.__max_frames
             logging.info(f"Current Frame: {self.__cur_frame}")
         elif key == 'Right':
-            new_frame = self.__cur_frame + 1
-            self.__cur_frame = new_frame if new_frame < self.__max_frames else self.__cur_frame
+            self.__cur_frame = (self.__cur_frame + 1) % self.__max_frames
             logging.info(f"Current Frame: {self.__cur_frame}")
         elif key == '0':
             self.__cur_frame = 0
             logging.info("Back to frame 0")
+        elif key == 'i':
+            logging.info(f"Current frame: {self.__cur_frame}")
+        elif key == 'q':
+            self.__render_window_interactor.ExitCallback()
+        elif key == "s":
+            self.__save_screenshot()
+        elif key == 'Return':
+            self.__record_screen_video()
 
     def __create_line_vtk_object(self, color) -> vtk.vtkLineSource:
         line = vtk.vtkLineSource()
@@ -383,3 +420,30 @@ class MoCapViewer(object):
         actor.GetProperty().SetColor(self.__colors.GetColor3d(color))
         self.__renderer.AddActor(actor)
         return line
+
+    def __save_screenshot(self):
+        w2if = vtk.vtkWindowToImageFilter()
+        w2if.SetInput(self.__render_window)
+        w2if.SetInputBufferTypeToRGB()
+        w2if.ReadFrontBufferOff()
+        w2if.Update()
+
+        file_name = f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.png"
+        writer = vtkPNGWriter()
+        writer.SetCompressionLevel(0)
+        writer.SetFileName(file_name)
+        writer.SetInputConnection(w2if.GetOutputPort())
+        writer.Write()
+        logging.info(f"Screenshot saved as {file_name}")
+
+    def __record_screen_video(self):
+        if not self.__is_screen_capture:
+            file_name = f"{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.mp4"
+            logging.info(f"Video capture started: {file_name}")
+            self.__movie_writer.SetFileName(file_name)
+            self.__movie_writer.Start()
+            self.__is_screen_capture = True
+        else:
+            logging.info("Video capture stopped...")
+            self.__movie_writer.End()
+            self.__is_screen_capture = False

@@ -55,13 +55,15 @@ class MoCapViewer(object):
             z_max: float = 10,
             point_size: float = 3.0,
             grid_axis: Union[str, None] = "xy",
-            bg_color: str = "lightslategray"
+            bg_color: str = "lightslategray",
+            pause: bool = False,
+            start_frame: int = 0
     ):
         self.__skeleton_objects = []
         self.__point_cloud_objects = []
         self.__max_frames = float("inf")
-        self.__cur_frame = 0
-        self.__pause = False
+        self.__cur_frame = start_frame
+        self.__pause = pause
         self.__record = False
         self.__trans_vector = np.array([0, 0, 0])
         self.__scale_factor = 1.0
@@ -119,6 +121,7 @@ class MoCapViewer(object):
             color: str = None,
             orientation: str = "quaternion",
             unit: str = "mm",
+            show_labels: bool = False,
     ):
         if len(data.shape) != 2:
             raise AttributeError(f"Data container has wrong dimensions. Given: {data.shape}, Expected: 2")
@@ -126,10 +129,12 @@ class MoCapViewer(object):
         if data.shape[1] % 3 != 0:
             raise ValueError(f"Column-number of dataframe should be a multiple of 3, received {data.shape[1]}.")
 
+        column_names = list(data.columns)
+
         if isinstance(data, pd.DataFrame):
             if isinstance(skeleton_connection, str):
                 skeleton_connection = get_skeleton_definition_for_camera(
-                    columns=list(data.columns),
+                    columns=column_names,
                     camera_name=skeleton_connection,
                     camera_count=len(self.__skeleton_objects),
                 )
@@ -156,6 +161,7 @@ class MoCapViewer(object):
 
         n_markers = data.shape[1] // 3
         actors_markers = []  # Each marker has an own actor
+        actors_labels = []  # Each marker has an own label
         lines = []
 
         if color is not None:
@@ -179,6 +185,21 @@ class MoCapViewer(object):
             self.__renderer.AddActor(actor)
             actors_markers.append(actor)
 
+            if show_labels:
+                # Create the 3D text and the associated mapper and follower (a type of actor) to align with the camera view.
+                a_text = vtk.vtkVectorText()
+                # Add a little space in front so that the text is not overlapping with the sphere
+                a_text.SetText("        " + column_names[marker * 3].replace(" (x)", ""))
+                text_mapper = vtk.vtkPolyDataMapper()
+                text_mapper.SetInputConnection(a_text.GetOutputPort())
+                text_actor = vtk.vtkFollower()
+                text_actor.SetMapper(text_mapper)
+                text_actor.SetScale(0.01, 0.01, 0.01)
+                text_actor.GetProperty().SetColor(1.0,1.0,1.0)
+                text_actor.SetCamera(self.__renderer.GetActiveCamera())
+                actors_labels.append(text_actor)
+                self.__renderer.AddActor(text_actor)
+
         if skeleton_connection is not None:
             for _ in skeleton_connection:
                 line = self.__create_line_vtk_object(color)
@@ -198,6 +219,7 @@ class MoCapViewer(object):
             "skeleton_definition": skeleton_connection,
             "bone_actors": lines,
             "actors_markers": actors_markers,
+            "actors_labels": actors_labels,
             "coordinate_axes": coordinate_axes,
         })
         self.__max_frames = min(self.__max_frames, len(data))
@@ -326,9 +348,14 @@ class MoCapViewer(object):
         for skeleton_data in self.__skeleton_objects:
             data = skeleton_data["data"]
             actors_markers = skeleton_data["actors_markers"]
+            actors_labels = skeleton_data["actors_labels"]
             points = (data[index].reshape(-1, 3) - self.__trans_vector) / self.__scale_factor
 
             for marker_idx, actor in enumerate(actors_markers):
+                x, y, z = points[marker_idx]
+                actor.SetPosition(x, y, z)
+
+            for marker_idx, actor in enumerate(actors_labels):
                 x, y, z = points[marker_idx]
                 actor.SetPosition(x, y, z)
 

@@ -122,6 +122,7 @@ class MoCapViewer(object):
             orientation: str = "quaternion",
             unit: str = "mm",
             show_labels: bool = False,
+            labels_scale: float = 0.01,
     ):
         if len(data.shape) != 2:
             raise AttributeError(f"Data container has wrong dimensions. Given: {data.shape}, Expected: 2")
@@ -194,7 +195,7 @@ class MoCapViewer(object):
                 text_mapper.SetInputConnection(a_text.GetOutputPort())
                 text_actor = vtk.vtkFollower()
                 text_actor.SetMapper(text_mapper)
-                text_actor.SetScale(0.01, 0.01, 0.01)
+                text_actor.SetScale(labels_scale, labels_scale, labels_scale)
                 text_actor.GetProperty().SetColor(1.0,1.0,1.0)
                 text_actor.SetCamera(self.__renderer.GetActiveCamera())
                 actors_labels.append(text_actor)

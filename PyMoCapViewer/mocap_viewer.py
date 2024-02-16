@@ -411,16 +411,24 @@ class MoCapViewer(object):
             self.__record_screen_video()
 
     def __create_line_vtk_object(self, color) -> vtk.vtkLineSource:
-        line = vtk.vtkLineSource()
-        line.SetPoint1(0, 0, 0)
-        line.SetPoint2(0, 0, 0)
+        line_source = vtk.vtkLineSource()
+        line_source.SetPoint1(0, 0, 0)
+        line_source.SetPoint2(0, 0, 0)
+
+        tube_filter = vtk.vtkTubeFilter()
+        tube_filter.SetInputConnection(line_source.GetOutputPort())
+        tube_filter.SetRadius(self.__sphere_radius / 4)  # Set the desired tube radius
+        tube_filter.SetNumberOfSides(50)  # Set the number of sides of the tube
+
         mapper = vtk.vtkPolyDataMapper()
-        mapper.AddInputConnection(line.GetOutputPort())
+        mapper.SetInputConnection(tube_filter.GetOutputPort())
+
         actor = vtk.vtkActor()
         actor.SetMapper(mapper)
         actor.GetProperty().SetColor(self.__colors.GetColor3d(color))
         self.__renderer.AddActor(actor)
-        return line
+
+        return line_source
 
     def __save_screenshot(self):
         w2if = vtk.vtkWindowToImageFilter()

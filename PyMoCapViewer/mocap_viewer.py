@@ -1,8 +1,10 @@
+import pandas as pd
+import numpy as np
+import open3d as o3d
+import vtk
+import logging
+
 from .skeletons import get_skeleton_definition_for_camera
-from typing import List, Tuple, Union
-from vtk.util.numpy_support import numpy_to_vtk, get_numpy_array_type, numpy_to_vtkIdTypeArray
-from vtkmodules.vtkIOImage import vtkPNGWriter
-from datetime import datetime
 from .utils import (
     create_xy_points,
     create_yz_points,
@@ -10,12 +12,11 @@ from .utils import (
     create_orientations_from_euler_angles,
     create_orientations_from_quaternions,
 )
+from typing import List, Tuple, Union
+from vtk.util.numpy_support import numpy_to_vtk, get_numpy_array_type, numpy_to_vtkIdTypeArray
+from vtkmodules.vtkIOImage import vtkPNGWriter
+from datetime import datetime
 
-import pandas as pd
-import numpy as np
-import open3d as o3d
-import vtk
-import logging
 
 COLORS = ["red", "green", "blue"]
 
@@ -54,7 +55,6 @@ class MoCapViewer(object):
             z_min: float = -10,
             z_max: float = 10,
             point_size: float = 3.0,
-            grid_axis: Union[str, None] = "xy",
             bg_color: str = "lightslategray",
             pause: bool = False,
             start_frame: int = 0
@@ -71,8 +71,6 @@ class MoCapViewer(object):
         self.__axis_scale = 0.3
         self.__video_count = 0
         self.__sampling_frequency = sampling_frequency
-        self.__grid_dimensions = 11
-        self.__grid_cell_size = 0.6
         self.__z_min = z_min
         self.__z_max = z_max
         self.__point_size = point_size
@@ -106,12 +104,47 @@ class MoCapViewer(object):
 
         self.__draw_coordinate_axes()
 
-        if grid_axis is not None:
-            if grid_axis not in planes:
-                raise AttributeError(f"Unknown grid axis given: {grid_axis}. Use 'xy', 'yz', or 'xz' or None")
+    def activate_grid(self, grid_axis: str, line_width: float, color: str, dimensions: int = 11):
+        if grid_axis not in planes:
+            raise AttributeError(f"Unknown grid axis given: {grid_axis}. Use 'xy', 'yz', or 'xz' or None")
 
-            self.__grid_creator = planes[grid_axis]
-            self.__draw_rectilinear_grid()
+        grid_creator = planes[grid_axis]
+        color = self.__colors.GetColor3d(color)
+        cell_size = 0.6
+        offset = dimensions / 2 * cell_size
+        for i in range(dimensions):
+            for j in range(dimensions):
+                p1, p2, p3, p4 = grid_creator(i, j, cell_size, offset)
+                points = vtk.vtkPoints()
+                points.InsertNextPoint(p1)
+                points.InsertNextPoint(p2)
+                points.InsertNextPoint(p3)
+                points.InsertNextPoint(p4)
+
+                polyLine = vtk.vtkPolyLine()
+                polyLine.GetPointIds().SetNumberOfIds(5)
+                polyLine.GetPointIds().SetId(0, 0)
+                polyLine.GetPointIds().SetId(1, 1)
+                polyLine.GetPointIds().SetId(2, 2)
+                polyLine.GetPointIds().SetId(3, 3)
+                polyLine.GetPointIds().SetId(4, 0)
+
+                cells = vtk.vtkCellArray()
+                cells.InsertNextCell(polyLine)
+
+                poly_data = vtk.vtkPolyData()
+                poly_data.SetPoints(points)
+                poly_data.SetLines(cells)
+
+                mapper = vtk.vtkPolyDataMapper()
+                mapper.SetInputData(poly_data)
+
+                actor = vtk.vtkActor()
+                actor.SetMapper(mapper)
+                actor.GetProperty().SetColor(color)
+                actor.GetProperty().SetLineWidth(line_width)
+                self.__renderer.AddActor(actor)
+
 
     def add_skeleton(
             self,
@@ -196,7 +229,7 @@ class MoCapViewer(object):
                 text_actor = vtk.vtkFollower()
                 text_actor.SetMapper(text_mapper)
                 text_actor.SetScale(labels_scale, labels_scale, labels_scale)
-                text_actor.GetProperty().SetColor(1.0,1.0,1.0)
+                text_actor.GetProperty().SetColor(1.0, 1.0, 1.0)
                 text_actor.SetCamera(self.__renderer.GetActiveCamera())
                 actors_labels.append(text_actor)
                 self.__renderer.AddActor(text_actor)
@@ -274,41 +307,6 @@ class MoCapViewer(object):
         axes.GetYAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
         axes.GetZAxisCaptionActor2D().GetTextActor().SetTextScaleModeToNone()
         self.__renderer.AddActor(axes)
-
-    def __draw_rectilinear_grid(self):
-        for i in range(self.__grid_dimensions):
-            for j in range(self.__grid_dimensions):
-                actor = self.__create_single_cell(i, j)
-                self.__renderer.AddActor(actor)
-
-    def __create_single_cell(self, x_coord: int, y_coord: int):
-        offset = self.__grid_dimensions / 2 * self.__grid_cell_size
-
-        points = vtk.vtkPoints()
-        p1, p2, p3, p4 = self.__grid_creator(x_coord, y_coord, self.__grid_cell_size, offset)
-        points.InsertNextPoint(p1)
-        points.InsertNextPoint(p2)
-        points.InsertNextPoint(p3)
-        points.InsertNextPoint(p4)
-
-        polyLine = vtk.vtkPolyLine()
-        polyLine.GetPointIds().SetNumberOfIds(5)
-        polyLine.GetPointIds().SetId(0, 0)
-        polyLine.GetPointIds().SetId(1, 1)
-        polyLine.GetPointIds().SetId(2, 2)
-        polyLine.GetPointIds().SetId(3, 3)
-        polyLine.GetPointIds().SetId(4, 0)
-
-        cells = vtk.vtkCellArray()
-        cells.InsertNextCell(polyLine)
-        poly_data = vtk.vtkPolyData()
-        poly_data.SetPoints(points)
-        poly_data.SetLines(cells)
-        mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputData(poly_data)
-        actor = vtk.vtkActor()
-        actor.SetMapper(mapper)
-        return actor
 
     def show_window(self):
         self.__render_window_interactor.AddObserver('TimerEvent', self._update)

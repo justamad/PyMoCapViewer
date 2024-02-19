@@ -1,15 +1,34 @@
-# PyMoCapViewer
-
 ![Alt text](docs/title_image.PNG?raw=true "PyMoCap")
 
-A simple Python Motion Capture Viewer using the VTK toolkit. It is able to visualize trajectories from 3D markers given as a Pandas Dataframe. It also is able to draw connection between adjacent joints. Until now, it supports pre-defined joint connection for:
+# PyMoCapViewer Documentation
 
-- Vicon Plug-in Gait model
-- Microsoft Azure Kinect
-- Microsoft Kinect v2
-- VNect definition
+PyMoCapViewer is a Python package designed to visualize motion capture data in a user-friendly and interactive manner. It allows you to load various mocap file formats, animate the skeleton, and control the viewing experience with keyboard shortcuts.
 
-## Example
+# Installation
+
+You can install PyMoCapViewer using pip:
+
+```bash
+pip install PyMoCapViewer
+```
+
+# Keyboard Shortcuts
+The following keyboard shortcuts are available for interacting with PyMoCapViewer:
+
+| Key               | Action                     |
+|-------------------|----------------------------|
+| Space             | Play/pause animation       | 
+| s                 | Capture screenshot         |
+| Enter             | Capture Screenvideo        |
+| i                 | Print current frame number |
+| 0                 | Jump to first frame        |
+| Left/Right Arrow  | Previous/Next frame        |
+| Left Mouse Button | Interact with scene        |
+| q                 | Quit application           |
+
+
+# Example Usage
+
 Load the kinematic data as a Pandas Dataframe. The columns should contain the joints in the following format: J1 (x), J1 (y), J1 (z), ..., JN (x), JN (y), JN (z).
 
 ```python

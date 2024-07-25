@@ -1,4 +1,4 @@
-![Alt text](docs/title_image.PNG?raw=true "PyMoCap")
+![Alt text](docs/title_image.PNG)
 
 # PyMoCapViewer Documentation
 

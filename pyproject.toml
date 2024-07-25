@@ -1,0 +1,26 @@
+[project]
+name = "PyMoCapViewer"
+version = "0.0.14"
+authors = [
+  { name="Justin Amadeus Albert", email="justin_albert@gmx.de" },
+]
+description = "A once-simple 3D motion capture visualizer that is becoming more advanced over time."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "vtk==9.3.1",
+    "open3d==0.18.0",
+    "numpy==2.0.1",
+    "pandas==2.2.2",
+    "scipy==1.14.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/justamad/PyMoCapViewer"
+Issues = "https://github.com/justamad/PyMoCapViewer"

@@ -6,3 +6,4 @@ vtk
 setuptools
 open3d
 scipy
+requests

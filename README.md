@@ -33,12 +33,15 @@ Load the kinematic data as a Pandas Dataframe. The columns should contain the jo
 
 ```python
 from PyMoCapViewer import MoCapViewer
+from PyMoCapViewer.examples import get_azure_data, get_vicon_data
 
-import pandas as pd
+df_pos, df_ori = get_azure_data()
+viewer = MoCapViewer(sphere_radius=0.01, sampling_frequency=30)
+viewer.add_skeleton(df_pos, skeleton_connection="azure", skeleton_orientations=df_ori, orientation="quaternion")
+viewer.show_window()
 
-df = pd.read_csv("file_to_vicon.csv")
-
-render = MoCapViewer(sampling_frequency=100)
-render.add_skeleton(df, skeleton_connection="vicon", color="gray")
-render.show_window()
+df = get_vicon_data()
+viewer = MoCapViewer(sphere_radius=0.01, sampling_frequency=100)
+viewer.add_skeleton(df, skeleton_connection="vicon", color="red")
+viewer.show_window()
 ```

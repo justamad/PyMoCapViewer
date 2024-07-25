@@ -1,0 +1,2 @@
+exclude data/
+exclude test.py

@@ -1,6 +1,6 @@
 [project]
 name = "PyMoCapViewer"
-version = "0.0.14"
+version = "0.0.15"
 authors = [
   { name="Justin Amadeus Albert", email="justin_albert@gmx.de" },
 ]
@@ -24,3 +24,6 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/justamad/PyMoCapViewer"
 Issues = "https://github.com/justamad/PyMoCapViewer"
+
+[tool.setuptools.packages.find]
+exclude = ["docs*", "data*"]
